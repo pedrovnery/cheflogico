@@ -5,12 +5,12 @@ const http = require('http'), fs = require('fs'), path = require('path'), os = r
 const PORT = process.env.PORT || 3000, DIR = __dirname, DB = path.join(DIR, 'ranking.json');
 const GAME = fs.readdirSync(DIR).find(f => /^Fome.*\.html$/i.test(f)) || 'index.html';
 
-let S = { resetT: 0, players: {} };
+let S = { resetT: 0, players: {}, endAt: 0, clearBy: '' };
 try { S = Object.assign(S, JSON.parse(fs.readFileSync(DB, 'utf8'))); } catch (e) {}
 
 const clients = new Set();
 let tm = null;
-const view = () => JSON.stringify({ resetT: S.resetT, list: Object.keys(S.players).map(id => ({ id, ...S.players[id] })) });
+const view = () => JSON.stringify({ resetT: S.resetT, endAt: S.endAt || 0, clearBy: S.clearBy || '', now: Date.now(), list: Object.keys(S.players).map(id => ({ id, ...S.players[id] })) });
 const save = () => { clearTimeout(tm); tm = setTimeout(() => fs.writeFile(DB, JSON.stringify(S), () => {}), 300); };
 const push = () => { const m = 'data: ' + view() + '\n\n'; for (const r of clients) r.write(m); };
 const body = req => new Promise(ok => {
@@ -43,7 +43,14 @@ http.createServer(async (req, res) => {
     res.writeHead(200); return res.end('ok');
   }
   if (u === '/api/clear' && req.method === 'POST') {
-    S = { resetT: Date.now(), players: {} };
+    const d = await body(req);
+    S = { resetT: Date.now(), players: {}, endAt: 0, clearBy: String(d.by || '').slice(0, 40) };
+    save(); push();
+    res.writeHead(200); return res.end('ok');
+  }
+  if (u === '/api/timer' && req.method === 'POST') {
+    const d = await body(req), ms = Math.max(0, Math.min(36e5, +d.ms || 0));
+    S.endAt = ms ? Date.now() + ms : 0;
     save(); push();
     res.writeHead(200); return res.end('ok');
   }

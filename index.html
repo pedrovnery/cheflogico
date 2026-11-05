@@ -114,6 +114,8 @@ html,body{background:#79bcf0}
 #fme{color:#fff;text-shadow:0 2px 0 #2a1608;font-weight:bold;text-align:center;margin:14px 0 4px;min-height:18px}
 #fnx{display:none;margin:12px auto 0;font-weight:900;font-size:clamp(16px,2.4vw,22px);color:#fff;background:linear-gradient(#8be05f,#3f9e2f);padding:10px 26px;box-shadow:0 5px 0 #22661a}
 @media(max-width:560px){.tr{grid-template-columns:44px 1fr 70px}.tr .c2{display:none}}
+#ftm{display:none;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin:0 0 12px;padding:10px;background:#2a1608;color:#ffd23c;border:3px solid #ffd23c;font-weight:900;font-size:clamp(18px,3vw,30px)}
+#ftb{font:inherit;font-size:14px;font-weight:bold;cursor:pointer;background:#ffd23c;color:#2a1608;border:3px solid #fffaf0;padding:7px 14px}
 </style></head><body>
 <canvas id="c"></canvas>
 <div class="ov" id="ord"></div>
@@ -131,7 +133,7 @@ html,body{background:#79bcf0}
 <div class="fm"><label for="nm">Seu nome:</label><input id="nm" maxlength="14" placeholder="Digite aqui..." autocomplete="off"><div id="nmerr"></div><button id="play">▶ PLAY</button></div>
 <div id="rkbox"><div class="rkh"><span>🏆 TOP 5</span></div><div id="rkS"></div></div>
 </div>
-<div id="fin"><div class="fw"><div class="ftop"><button id="fbk">← VOLTAR</button><span id="rkmode"></span></div><h1>Ranking</h1><div id="fsub"></div><div id="fsum"></div><div class="fcard" id="fnl"></div><div id="fme"></div><button id="fnx">▶ Novo pedido</button><button id="rkclr">🗑 LIMPAR RANKING</button></div></div>
+<div id="fin"><div class="fw"><div class="ftop"><button id="fbk">← VOLTAR</button><span id="rkmode"></span></div><h1 id="fh">Ranking</h1><div id="fsub"></div><div id="ftm"><span id="ftt">⏱ 3:00</span><button id="ftb">▶ INICIAR TIMER</button></div><div id="fsum"></div><div class="fcard" id="fnl"></div><div id="fme"></div><button id="fnx">▶ Novo pedido</button><button id="rkclr">🗑 LIMPAR RANKING</button></div></div>
 <div id="pick"><div id="pkf"><div class="pkh"><b id="pkt"></b><button id="pkx">✕ fechar</button></div><div id="pkb"></div><div id="pkm"></div></div></div>
 <script>
 const C=document.getElementById('c'),mx=C.getContext('2d'),B=document.createElement('canvas'),x=B.getContext('2d'),Q=document.getElementById('q'),M=document.getElementById('msg'),O=document.getElementById('ord');
@@ -761,8 +763,8 @@ function rkTable(el){const L=rkList(),T=L.slice(0,10);
 function rkRender(){rkTable($('fnl'));rkFill($('rkS'),5);RK.prev={};RK.raw.forEach(e=>RK.prev[e.id]=e.score)}
 function localRead(){try{const o=JSON.parse(lsGet('fl_rank')||'{}');return Object.keys(o).map(k=>Object.assign({id:k},o[k]))}catch(e){return[]}}
 function localWrite(rec){let o={};try{o=JSON.parse(lsGet('fl_rank')||'{}')}catch(e){}o[ME_ID]=rec;lsSet('fl_rank',JSON.stringify(o));RK.raw=localRead();rkRender()}
-function rkReset(t){if(t>RK.resetT){RK.resetT=t;const seen=+lsGet('fl_reset')||0;if(t>seen){lsSet('fl_reset',String(t));if(STARTED){SCORE=WINS=ERRS=0;updateMe()}}rkRender()}}
-function srvApply(d){RK.raw=d.list||[];if(d.resetT>RK.resetT)rkReset(d.resetT);else rkRender()}
+function rkReset(t){if(t>RK.resetT){RK.resetT=t;const seen=+lsGet('fl_reset')||0;if(t>seen){lsSet('fl_reset',String(t));if(STARTED){SCORE=WINS=ERRS=0;updateMe();if(RK.mode=='srv'&&RK.by!=ME_ID)location.reload()}}rkRender()}}
+function srvApply(d){RK.raw=d.list||[];RK.by=d.clearBy;if(d.now)TM.off=d.now-Date.now();tmSet(d.endAt||0);if(d.resetT>RK.resetT)rkReset(d.resetT);else rkRender()}
 async function srvTry(){try{if(!/^https?:/.test(location.protocol))return;const r=await fetch('/api/ranking',{cache:'no-store'});if(!r.ok)return;const d=await r.json();if(!d||!Array.isArray(d.list))return;
  RK.mode='srv';ME_ID=lsGet('fl_uid')||('l'+Math.random().toString(36).slice(2,10));lsSet('fl_uid',ME_ID);srvApply(d);
  try{const es=new EventSource('/api/stream');es.onmessage=ev=>{try{srvApply(JSON.parse(ev.data))}catch(e){}}}catch(e){}
@@ -775,18 +777,29 @@ async function rkInit(){let ok2=false;await srvTry();
  $('rkmode').textContent=RK.mode=='srv'?'● ao vivo · servidor':RK.mode=='db'?'● ao vivo · todos os jogadores':'● só neste navegador';rkRender()}
 function rkSave(){if(!STARTED||!NAME)return;DIRTY=true;if(WR||SAVEQ)return;SAVEQ=setTimeout(rkFlush,500)}
 async function rkFlush(){SAVEQ=null;if(WR)return;WR=true;while(DIRTY){DIRTY=false;const rec={name:NAME,score:SCORE,wins:WINS,errs:ERRS,t:Date.now()};try{if(RK.mode=='srv')await fetch('/api/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:ME_ID,name:NAME,score:SCORE,wins:WINS,errs:ERRS})});else if(RK.mode=='db')await DBR.doc('ranking/'+ME_ID).set(rec);else localWrite(rec)}catch(e){}}WR=false}
-async function rkClear(){const t=Date.now();SCORE=WINS=ERRS=0;updateMe();
- try{if(RK.mode=='srv'){await fetch('/api/clear',{method:'POST'})}else if(RK.mode=='db'){await DBR.doc('meta/reset').set({t});try{const s=await DBR.collection('ranking').get();for(const d of s.docs){try{await DBR.doc('ranking/'+d.id).delete()}catch(e){}}}catch(e){}}
+async function rkClear(){const t=Date.now();SCORE=WINS=ERRS=0;updateMe();if(RK.mode!='srv')tmSet(0);
+ try{if(RK.mode=='srv'){await fetch('/api/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({by:ME_ID})})}else if(RK.mode=='db'){await DBR.doc('meta/reset').set({t});try{const s=await DBR.collection('ranking').get();for(const d of s.docs){try{await DBR.doc('ranking/'+d.id).delete()}catch(e){}}}catch(e){}}
   else{lsSet('fl_rank','{}');lsSet('fl_reset',String(t));RK.raw=[];RK.resetT=t;rkRender()}say('Ranking limpo para todos.')}catch(e){say('Não foi possível limpar o ranking.')}}
 let FINEND=false;
-function openRk(end){FINEND=end;$('fnx').style.display=end?'block':'none';$('fbk').style.display=end?'none':'inline-block';$('fsum').style.display=end?'block':'none';$('rkclr').style.display=ADM?'block':'none';$('fin').style.display='block';$('fin').scrollTop=0;rkRender()}
+function openRk(m){FINEND=m>0;$('fnx').style.display=m==1?'block':'none';$('fbk').style.display=(m==0||(m==2&&ADM))?'inline-block':'none';$('fsum').style.display=m>0?'block':'none';$('fh').textContent=m==2?'Fim de jogo':'Ranking';$('rkclr').style.display=ADM?'block':'none';$('ftm').style.display=ADM?'flex':'none';$('fin').style.zIndex=m==2?40:25;$('fin').style.display='block';$('fin').scrollTop=0;rkRender()}
 function closeRk(){$('fin').style.display='none'}
-function rkAdmUI(){const d=ADM?'block':'none';$('rkclr').style.display=d;$('rkb').style.display=d;$('rkbox').style.display=d;if(!ADM&&!FINEND)closeRk()}
-function showFinal(){Q.style.display='none';if(SAVEQ){clearTimeout(SAVEQ);rkFlush()}$('fsum').innerHTML='🎉 Pedido entregue! <b>+50</b> · Erros neste pedido: '+G.err;openRk(true)}
+function rkAdmUI(){const d=ADM?'block':'none';$('rkclr').style.display=d;$('rkb').style.display=d;$('rkbox').style.display=d;$('ftm').style.display=ADM?'flex':'none';if(!ADM&&!FINEND)closeRk()}
+function showFinal(){Q.style.display='none';if(SAVEQ){clearTimeout(SAVEQ);rkFlush()}$('fsum').innerHTML='🎉 Pedido entregue! <b>+50</b> · Erros neste pedido: '+G.err;openRk(1)}
 $('fbk').onclick=closeRk;addEventListener('keydown',e=>{if(e.key=='Escape'&&!FINEND)closeRk()});
+const TM={endAt:0,off:0,done:false};let OVER=false,FIMON=false;
+function tmLeft(){return TM.endAt?TM.endAt-(Date.now()+TM.off):0}
+function tmFmt(ms){ms=Math.max(0,Math.ceil(ms/1000));return(ms/60|0)+':'+String(ms%60).padStart(2,'0')}
+function tmSet(e){if(e!=TM.endAt){TM.endAt=e;TM.done=false;if(FIMON){FIMON=false;OVER=false;closeRk()}}}
+async function tmCmd(ms){if(RK.mode=='srv'){try{await fetch('/api/timer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ms})})}catch(e){}}else tmSet(ms?Date.now()+ms:0)}
+function showFim(){OVER=true;FIMON=true;if(SAVEQ){clearTimeout(SAVEQ);rkFlush()}const L=rkList(),p=L.findIndex(e=>e.id==ME_ID);
+ $('fsum').innerHTML='⏱ <b>Tempo esgotado!</b>'+(STARTED?' Você fez ⭐ <b>'+SCORE+'</b> pts'+(p>=0?' · '+(p+1)+'º lugar':''):'')+'<br><small>Aguarde o ADM começar uma nova rodada.</small>';openRk(2)}
+$('ftb').onclick=()=>tmCmd(TM.endAt&&tmLeft()>0?0:180000);
+addEventListener('keydown',e=>{if(OVER&&!ADM&&!['k','l','ç',';'].includes(e.key.toLowerCase()))e.stopImmediatePropagation()},true);
+setInterval(()=>{const r=tmLeft();if(TM.endAt&&r<=0&&!TM.done){TM.done=true;showFim()}
+ if(ADM){$('ftt').textContent=TM.endAt?(r>0?'⏱ '+tmFmt(r):'⏱ 0:00 · FIM'):'⏱ 3:00';$('ftb').textContent=TM.endAt&&r>0?'■ PARAR':'▶ INICIAR TIMER'}},250);
 $('fnx').onclick=()=>{$('fin').style.display='none';start()};
 let clrT=0;$('rkclr').onclick=()=>{const b=$('rkclr');if(!clrT){b.textContent='Tem certeza? Clique de novo';clrT=setTimeout(()=>{clrT=0;b.textContent='🗑 LIMPAR RANKING'},3000)}else{clearTimeout(clrT);clrT=0;b.textContent='🗑 LIMPAR RANKING';rkClear()}};
-$('rkb').onclick=()=>openRk(false);
+$('rkb').onclick=()=>openRk(0);
 function toggleAdm(){toggleAdm0();rkAdmUI()}
 function ans(j){const t=G.t[G.i];
  if(j==t.q.c){bump(t.q.w?5:10);const e=expl(t);if(t.a=='pass'){say('💡 '+plain(e));done();return}G.locked=false;Q.style.display='none';tsk(short(t),'💡 '+plain(e)+' · '+plain(t.d))}
